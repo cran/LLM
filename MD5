@@ -1,0 +1,10 @@
+61a3f482c0fe4264aaa983b9a4ce1a72 *DESCRIPTION
+43f7aaff0b16f99381c7f641c86c9ff0 *NAMESPACE
+fe467cbd98e3c2e04d60c7ee69f99cab *R/llm.R
+ff498c5863d011f522778247fb10abab *R/llm.create.HTML.visualization.R
+55c7b9583344ea5f7fa6f3a011ad161e *R/llm.cv.R
+49edc42d0cc7bbc0d6651ea2eb2da3a2 *R/llm.predict.R
+fcd7d00e060bf2a6c67c815cc89278b0 *man/llm.Rd
+a3c6389cff86c90d2d483c89b4abdbed *man/llm.cv.Rd
+6f12c8431a4f13f4283ca55e1ab603d1 *man/predict.llm.Rd
+af6f3bd404f772999c9a40a8cb23e650 *man/table.llm.html.Rd

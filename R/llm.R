@@ -10,8 +10,11 @@
 #' @param threshold_pruning Set confidence threshold for pruning. Default 0.25.
 #' @param nbr_obs_leaf The minimum number of observations in a leaf node. Default 100.
 #' @return An object of class logitleafmodel, which is a list with the following components:
-#' \item{DecisionRules}{The raw decision rules that define segments. Use \code{\link{table.llm.html}} to visualize.}
+#' \item{Segment Rules}{The decision rules that define segments. Use \code{\link{table.llm.html}} to visualize.}
 #' \item{Coefficients}{The segment specific logistic regression coefficients. Use \code{\link{table.llm.html}} to visualize.}
+#' \item{Full decision tree for segmentation}{The raw decision tree. Use \code{\link{table.llm.html}} to visualize.}
+#' \item{Observations per segment}{The raw decision tree. Use \code{\link{table.llm.html}} to visualize.}
+#' \item{Incidence of dependent per segment}{The raw decision tree. Use \code{\link{table.llm.html}} to visualize.}
 #' @import partykit
 #' @importFrom stats binomial step glm
 #' @importFrom RWeka J48
@@ -34,6 +37,7 @@
 #'  threshold_pruning = 0.25,nbr_obs_leaf = 100)
 #'
 
+
 llm <- function(X,Y,threshold_pruning=0.25 , nbr_obs_leaf=100) {
   if (threshold_pruning < 0 | threshold_pruning> 1){
     stop("Enter a valid threshold for pruning value [0,1] (threshold_pruning)")
@@ -53,26 +57,11 @@ llm <- function(X,Y,threshold_pruning=0.25 , nbr_obs_leaf=100) {
   if (nlevels(Y) != 2){
     stop("Only binary classification is supported at the moment")
   }
-  # Custom functions that are used in the LLM function
-  # _1_ trim.leading
-  # _2_ ceiling.dec
-  # _3_ dt.splitter
-
-  # _1_ trim.leading
-  # Trim leading white spaces
-  trim.leading <- function (x)  sub("^\\s+", "", x)
-
-  # _2_ ceiling.dec
-  # Round numerics at certain decimals ceiling
-  ceiling.dec <- function(x,level=1) round(x+5*10^(-level-1),level)
-
-  # _3_ dt.splitter
-  # Splis space into subspaces according to decision tree rules
-  # _3.1_ dt.splitter requires unepxorted .list.rules.party function from partykit. Therefore it is added below
-  list.rules.party <- function(x, i = NULL, ...) {
-    if (is.null(i)) i <- partykit::nodeids(x, terminal = TRUE)
+  # .list.rules function: see partykit package
+  .list.rules.party <- function(x, i = NULL, ...) {
+    if (is.null(i)) i <- nodeids(x, terminal = TRUE)
     if (length(i) > 1) {
-      ret <- sapply(i, list.rules.party, x = x)
+      ret <- sapply(i, .list.rules.party, x = x)
       names(ret) <- if (is.character(i)) i else names(x)[i]
       return(ret)
     }
@@ -81,7 +70,7 @@ llm <- function(X,Y,threshold_pruning=0.25 , nbr_obs_leaf=100) {
     stopifnot(length(i) == 1 & is.numeric(i))
     stopifnot(i <= length(x) & i >= 1)
     i <- as.integer(i)
-    dat <- partykit::data_party(x, i)
+    dat <- data_party(x, i)
     if (!is.null(x$fitted)) {
       findx <- which("(fitted)" == names(dat))[1]
       fit <- dat[,findx:ncol(dat), drop = FALSE]
@@ -96,13 +85,13 @@ llm <- function(X,Y,threshold_pruning=0.25 , nbr_obs_leaf=100) {
     rule <- c()
 
     recFun <- function(node) {
-      if (partykit::id_node(node) == i) return(NULL)
-      kid <- sapply(partykit::kids_node(node), id_node)
+      if (id_node(node) == i) return(NULL)
+      kid <- sapply(kids_node(node), id_node)
       whichkid <- max(which(kid <= i))
-      split <- partykit::split_node(node)
-      ivar <- partykit::varid_split(split)
+      split <- split_node(node)
+      ivar <- varid_split(split)
       svar <- names(dat)[ivar]
-      index <- partykit::index_split(split)
+      index <- index_split(split)
       if (is.factor(dat[, svar])) {
         if (is.null(index))
           index <- ((1:nlevels(dat[, svar])) > breaks_split(split)) + 1
@@ -112,10 +101,10 @@ llm <- function(X,Y,threshold_pruning=0.25 , nbr_obs_leaf=100) {
                        sep = "")
       } else {
         if (is.null(index)) index <- 1:length(kid)
-        breaks <- cbind(c(-Inf, partykit::breaks_split(split)),
-                        c(partykit::breaks_split(split), Inf))
+        breaks <- cbind(c(-Inf, breaks_split(split)),
+                        c(breaks_split(split), Inf))
         sbreak <- breaks[index == whichkid,]
-        right <- partykit::right_split(split)
+        right <- right_split(split)
         srule <- c()
         if (is.finite(sbreak[1]))
           srule <- c(srule,
@@ -128,80 +117,57 @@ llm <- function(X,Y,threshold_pruning=0.25 , nbr_obs_leaf=100) {
       rule <<- c(rule, srule)
       return(recFun(node[[whichkid]]))
     }
-    node <- recFun(partykit::node_party(x))
+    node <- recFun(node_party(x))
     paste(rule, collapse = " & ")
   }
 
-  dt.splitter <- function(DTmodel, nom =ifelse(length(as.character(DTmodel$call$data))==1,nom <- as.character(DTmodel$call$data), nom<- as.character(DTmodel$call$data)[2])){
-    # This function has two inputs:
-    #       1) Decision tree model (J48)
-    #       2) nom, standard value is the data used in the DT model (your train model) but you might want to change it for test set
 
-    m2 <- partykit::as.party.Weka_tree(DTmodel)
-    # Retrieve the rules of the Decision tree
 
-    listrules <- list.rules.party(m2)
-    # listrules <- partykit:::.list.rules.party(m2)
-    newvar2 <- ""
-
-    # If the listrules does not contain a subtree, do nothing (a regular LR will be fitted)
-    if(length(listrules) > 1) {
-      for (l in 1:length(listrules)) {
-        # Split them based on the & sign
-        splittest <- strsplit(listrules[[l]],split = "&")
-        new <- ""
-        # Recode each condition in the splittest and save it in a newvar
-        for (i in 1:length(splittest[[1]])) {
-          splittest2 <- strsplit(trim.leading(splittest[[1]][i]),split = " ")
-          new <- paste(paste0(nom,"[,'",splittest2[[1]][1], "']") , splittest2[[1]][2],"ceiling.dec(", splittest2[[1]][3],",4)", sep= " ")
-          ifelse(i== 1, newvar <- new, newvar <- paste(newvar, "&" , new, sep = " "))
-        }
-        newvar2[l] <- newvar
-      }
-    }
-
-    return(newvar2)
-  }
-
-  # Give the dataframe generic name (necessary to split the rules for both training and test set correctly)
-  # TODO find more efficient solution to partition the data
-  basetabadc150392 <- X
-  basetabadc150392[,(ncol(basetabadc150392)+1)] <- c(1:nrow(basetabadc150392))
-  myreturn <- vector("list", 2)
-  # Create DT model based on paramens
+  # Create Decision Tree model with the parameters
   m1 <- RWeka::J48(as.factor(as.character(Y)) ~ .,
-                   data = basetabadc150392[,1:(ncol(basetabadc150392)-1)],
+                   data = X,
                    control = RWeka::Weka_control(M = nbr_obs_leaf, C= threshold_pruning))
-  # Split the dataset based on the number of "cluster" from the decision tree
-  newvar <- dt.splitter(m1, "basetabadc150392")
-  listythelist <- vector("list",length(newvar))
+  # Extract the rules
+  Pm1 = partykit::as.party(m1)
+  Pm1_rules = .list.rules.party(Pm1)
 
-  # If length newvar > 1 : there are splits, so we do a LR for every split
-  for (l in 1:length(newvar)) {
-    # Subset the train set based on the rule of the DT
-    ifelse(length(newvar)>1,
-           # If nbr of split is >1, than we subset according to rules DT
-           train_ss <- basetabadc150392[which(eval(parse(text= newvar[l]))), ],
-           # Otherwise we select the entire dataset
-           train_ss <- basetabadc150392[,]
-    )
+  # Extract the nodes
+  TrainPred = stats::predict(Pm1, newdata=X, type="node")
 
-    rownbrs <- train_ss[,ncol(train_ss)]
-    y_sel <- Y[rownbrs]
+  # Create a list to store the output of the different logistic regressions
+  listythelist <- vector("list",length(Pm1_rules))
+  listythelist2 <- vector("list",length(Pm1_rules))
+  listythelist3 <- vector("list",length(Pm1_rules))
+
+  aa <- as.numeric()
+  # Do a LR for every split
+  for (l in 1:length(Pm1_rules)) {
+    # Subset based on the segments of the DT
+    train_ss <- X[which(TrainPred==names(Pm1_rules)[l]), ]
+    y_sel <- Y[which(TrainPred==names(Pm1_rules)[l])]
 
     # Train a LR for each subset with forward variable selection
     # build a glm model on the training data
-    LR <- stats::glm(y_sel ~ ., data=train_ss[,1:(ncol(basetabadc150392)-1)], family=stats::binomial("logit"))
-    LR1 <- stats::glm(y_sel ~ 1, data=train_ss[,1:(ncol(basetabadc150392)-1)], family=stats::binomial("logit"))
+    LR <- stats::glm(y_sel ~ ., data=train_ss, family=stats::binomial("logit"))
+    LR1 <- stats::glm(y_sel ~ 1, data=train_ss, family=stats::binomial("logit"))
 
     # stepwise variable selection
     listythelist[[l]] <- stats::step(LR1,direction="forward" ,scope = list(lower= LR1, upper = LR), trace = 0)
-
+    listythelist2[[l]] <- nrow(train_ss)
+    listythelist3[[l]] <- 1 - (table(y_sel)[1]/ length(y_sel))
   }
-  myreturn[[1]] <- newvar
+  myreturn <- list()
+  myreturn[[1]] <- Pm1_rules
   myreturn[[2]] <- listythelist
+  myreturn[[3]] <- m1
+  myreturn[[4]] <- listythelist2
+  myreturn[[5]] <- listythelist3
   class(myreturn) <- "logitleafmodel"
-  names(myreturn)[[1]] <- "SegmentRulesNotClean"
+  names(myreturn)[[1]] <- "Segment Rules"
   names(myreturn)[[2]] <- "Coefficients"
+  names(myreturn)[[3]] <- "Full decision tree for segmentation"
+  names(myreturn)[[4]] <- "Observations per segment"
+  names(myreturn)[[5]] <- "Incidence of dependent per segment"
   return(myreturn)
 }
+

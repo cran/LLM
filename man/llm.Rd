@@ -17,8 +17,11 @@ llm(X, Y, threshold_pruning = 0.25, nbr_obs_leaf = 100)
 }
 \value{
 An object of class logitleafmodel, which is a list with the following components:
-\item{DecisionRules}{The raw decision rules that define segments. Use \code{\link{table.llm.html}} to visualize.}
+\item{Segment Rules}{The decision rules that define segments. Use \code{\link{table.llm.html}} to visualize.}
 \item{Coefficients}{The segment specific logistic regression coefficients. Use \code{\link{table.llm.html}} to visualize.}
+\item{Full decision tree for segmentation}{The raw decision tree. Use \code{\link{table.llm.html}} to visualize.}
+\item{Observations per segment}{The raw decision tree. Use \code{\link{table.llm.html}} to visualize.}
+\item{Incidence of dependent per segment}{The raw decision tree. Use \code{\link{table.llm.html}} to visualize.}
 }
 \description{
 This function creates the logit leaf model. It takes a dataframe with numeric

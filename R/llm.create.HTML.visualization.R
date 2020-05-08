@@ -49,21 +49,19 @@ table.llm.html <- function(object, headertext= "The Logit Leaf Model", footertex
   iii <- 1
   for (i in 1:length(object[[1]])) {
     # Loop over segment specific rules
-    allsegrules <-object[[1]][i]
+    allsegrules <-object[[1]][i][[1]]
     # Create decision rule overview table
     for (ii in 1:decisionrules) {
-      if(is.na(strsplit(strsplit(allsegrules, split = "&")[[1]][ii], "'")[[1]][2])){
+      if(is.na(strsplit(strsplit(allsegrules, split = "&")[[1]][ii], "'")[[1]])){
         var <- "."
         sign <- "."
         number <- "."
       }else{
-        var <- strsplit(strsplit(allsegrules, split = "&")[[1]][ii], "'")[[1]][2]
-        sign <- substr(strsplit(strsplit(allsegrules, split = "&")[[1]][ii], "]")[[1]][2], 1,3)
-
+        var <- strsplit(stringr::str_trim(strsplit(allsegrules, split = "&")[[1]][ii]), " ")[[1]][[1]]
+        sign <- strsplit(stringr::str_trim(strsplit(allsegrules, split = "&")[[1]][ii]), " ")[[1]][[2]]
         # Find the value
-        consideredstring <- strsplit(strsplit(allsegrules, split = "&")[[1]][ii], "ceiling.dec")[[1]][2]
-        com <- regexpr(pattern = ",", consideredstring)-1
-        number <- round(as.numeric(substr(consideredstring, 2,com )), roundingnumbers)
+        consideredstring <- strsplit(stringr::str_trim(strsplit(allsegrules, split = "&")[[1]][ii]), " ")[[1]][[3]]
+        number <- round(as.numeric(consideredstring), roundingnumbers)
       }
 
       # Fill in the values

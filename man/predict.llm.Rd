@@ -4,14 +4,12 @@
 \alias{predict.llm}
 \title{Create Logit Leaf Model Prediction}
 \usage{
-\method{predict}{llm}(object, X, addrownumbers = TRUE, ...)
+\method{predict}{llm}(object, X, ...)
 }
 \arguments{
 \item{object}{An object of class logitleafmodel, as that created by the function llm.}
 
 \item{X}{Dataframe containing numerical independent variables.}
-
-\item{addrownumbers}{Boolean to add row numbers in output.}
 
 \item{...}{further arguments passed to or from other methods.}
 }
